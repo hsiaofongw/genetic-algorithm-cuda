@@ -60,7 +60,7 @@ class Population:
         # 如果 j+1 == routes.shape[1]，则 out_distances[i, j] = 距离[routes[i, j], routes[i, 0]]
         BLOCK_SIZE = 16
         dim_block = (BLOCK_SIZE, BLOCK_SIZE, )
-        dim_grid = (ceil(self.n_genes/dim_block[1]), ceil(self.genes.shape[0]/dim_block[0]), )
+        dim_grid = (ceil(self.n_genes/dim_block[0]), ceil(self.genes.shape[0]/dim_block[1]), )
         out_distances = cp.zeros(shape = self.genes.shape, dtype = cp.float32)
         distance_kernel(
             dim_grid, 
@@ -87,10 +87,8 @@ class Population:
         # 把排位改变为降序排列
         order = cp.subtract(self.genes.shape[0] - 1, order)
 
-        # probs[i] 是 population[i] 被选入下一代的概率（没被选入的则被淘汰）
-        probs = cp.divide(order, cp.sum(order))
-
-        self.probs = probs
+        # probs[i] 是第 i 个个体被选入下一代的概率
+        self.probs = cp.divide(order, cp.sum(order))
 
     # 通过基因变异引入新性状
     def populations_mutate(self) -> None:
@@ -123,10 +121,9 @@ class Population:
         )
 
         # 设定 GPU 资源参数，开始调用
-        # 原地修改 population
         BLOCK_SIZE = 16
         dim_block = (1, BLOCK_SIZE, )
-        dim_grid = (1, ceil(self.genes.shape[0]/dim_block[0]),)
+        dim_grid = (1, ceil(self.genes.shape[0]/dim_block[1]),)
         bit_flop_kernel(
             dim_grid,
             dim_block,
@@ -136,8 +133,8 @@ class Population:
     # 产生下一代幼崽
     def born_next_generation(self) -> None:
 
-        # 给每个 population 找伴侣进行 cross
-        # 也就是生成 pop_size 个范围在 [0, pop_size-1] 的随机数
+        # 给每个个体找伴侣进行 cross
+        # 也就是为每个个体生成范围在 [0, pop_size-1] 的随机数
         # 0, 1, 2, ..., pop_size-1 被取到的概率就是之前算出来的 probs
         match = cp.random.choice(
             a = self.genes.shape[0],
