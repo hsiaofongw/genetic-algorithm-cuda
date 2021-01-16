@@ -28,7 +28,7 @@ class Population:
 
     # 生成初始种群
     @classmethod
-    def generate_initial_population(cls, n_size: int, n_genes: int) -> Population:
+    def generate_initial_population(cls, n_size: int, n_genes: int) -> cls:
 
         genes = cp.random.randint(
             low = 0, 
