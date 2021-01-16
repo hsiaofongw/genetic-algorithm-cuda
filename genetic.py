@@ -25,10 +25,12 @@ class Population:
 
     def __init__(self, genes: cp.ndarray) -> None:
         self.genes = genes
+        self.n_genes = genes.shape[1]
+        self.n_size = genes.shape[0]
 
     # 生成初始种群
     @classmethod
-    def generate_initial_population(cls, n_size: int, n_genes: int) -> cls:
+    def generate_initial_population(cls, n_size: int, n_genes: int):
 
         genes = cp.random.randint(
             low = 0, 
@@ -71,16 +73,25 @@ class Population:
         # 也就是，从 routes[i, 0] 出发，再回到 routes[i, 0] 走过的总距离
         distances_per_sample = cp.sum(out_distances, axis=1)
 
-        # order[i] 是 routes[i] 的距离的排名，距离越长，排名越靠后 ( order[i] 值越大 )
-        order = cp.argsort(cp.argsort(distances_per_sample))
+        # 距离越长，得分越低
+        self.scores = cp.subtract(0, distances_per_sample)
+    
+    # 计算每个个体的生存几率
+    def calculate_survival_chance(self):
 
-        # 现在，距离越长，排名越靠前 ( order[i] 值越小 )
+        # 首先获取适应度，值越高，适应得越好
+        scores = self.scores
+
+        # 升序排列，数字越高，对应的适应度越高
+        order = cp.argsort(cp.argsort(scores))
+
+        # 把排位改变为降序排列
         order = cp.subtract(self.n_size - 1, order)
 
         # probs[i] 是 population[i] 被选入下一代的概率（没被选入的则被淘汰）
         probs = cp.divide(order, cp.sum(order))
 
-        self.scores = probs
+        self.probs = probs
 
     # 通过基因变异引入新性状
     def populations_mutate(self) -> None:
@@ -159,13 +170,13 @@ class Population:
         self.n_size = self.genes.shape[0]
 
     # 过滤与筛选
-    def select_next_gen(self, probs: cp.ndarray) -> None:
+    def select_next_gen(self) -> None:
 
         # 那么就按照 probs 作为概率，选出下一代
         next_gen_indexes = cp.unique(cp.random.choice(
             self.n_size, 
             size = self.n_size, 
-            p = probs
+            p = self.scores
         ))
 
         self.genes = self.genes[next_gen_indexes, :]
