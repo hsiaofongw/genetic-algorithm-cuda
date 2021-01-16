@@ -20,13 +20,9 @@ class Population:
     # 每个个体有多少个基因位点
     n_genes: int
 
-    # 种群的规模（有多少个个体）
-    n_size: int
-
     def __init__(self, genes: cp.ndarray) -> None:
         self.genes = genes
         self.n_genes = genes.shape[1]
-        self.n_size = genes.shape[0]
 
     # 生成初始种群
     @classmethod
@@ -61,12 +57,12 @@ class Population:
         # 如果 j+1 == routes.shape[1]，则 out_distances[i, j] = 距离[routes[i, j], routes[i, 0]]
         BLOCK_SIZE = 16
         dim_block = (BLOCK_SIZE, BLOCK_SIZE, )
-        dim_grid = (ceil(self.n_genes/dim_block[1]), ceil(self.n_size/dim_block[0]), )
+        dim_grid = (ceil(self.n_genes/dim_block[1]), ceil(self.genes.shape[0]/dim_block[0]), )
         out_distances = cp.zeros(shape = self.genes.shape, dtype = cp.float32)
         distance_kernel(
             dim_grid, 
             dim_block, 
-            (routes, distance_mat, out_distances, self.n_genes, self.n_size,)
+            (routes, distance_mat, out_distances, self.n_genes, self.genes.shape[0],)
         )
 
         # distances_per_sample[i] 是 routes[i] 走过的总距离，
@@ -86,7 +82,7 @@ class Population:
         order = cp.argsort(cp.argsort(scores))
 
         # 把排位改变为降序排列
-        order = cp.subtract(self.n_size - 1, order)
+        order = cp.subtract(self.genes.shape[0] - 1, order)
 
         # probs[i] 是 population[i] 被选入下一代的概率（没被选入的则被淘汰）
         probs = cp.divide(order, cp.sum(order))
@@ -101,7 +97,7 @@ class Population:
         mutate = cp.random.randint(
             low = 0,
             high = 2,
-            size = (self.n_size, 1),
+            size = (self.genes.shape[0], 1),
             dtype = cp.uint16
         )
 
@@ -109,7 +105,7 @@ class Population:
         col_ind = cp.random.randint(
             low = 0, 
             high = self.n_genes, 
-            size = (self.n_size, 1),
+            size = (self.genes.shape[0], 1),
             dtype = cp.uint32
         )
 
@@ -119,7 +115,7 @@ class Population:
         bit_ind = cp.random.randint(
             low = 0, 
             high = 32,
-            size = (self.n_size, 1),
+            size = (self.genes.shape[0], 1),
             dtype = cp.uint32
         )
 
@@ -127,11 +123,11 @@ class Population:
         # 原地修改 population
         BLOCK_SIZE = 16
         dim_block = (1, BLOCK_SIZE, )
-        dim_grid = (1, ceil(self.n_size/dim_block[0]),)
+        dim_grid = (1, ceil(self.genes.shape[0]/dim_block[0]),)
         bit_flop_kernel(
             dim_grid,
             dim_block,
-            (self.genes, self.n_size, self.n_genes, col_ind, bit_ind, mutate, )
+            (self.genes, self.genes.shape[0], self.n_genes, col_ind, bit_ind, mutate, )
         )
 
     # 产生下一代幼崽
@@ -141,25 +137,25 @@ class Population:
         # 也就是生成 pop_size 个范围在 [0, pop_size-1] 的随机数
         # 0, 1, 2, ..., pop_size-1 被取到的概率就是之前算出来的 probs
         match = cp.random.choice(
-            a = self.n_size,
-            size = self.n_size,
+            a = self.genes.shape[0],
+            size = self.genes.shape[0],
             replace = True,
             p = self.scores
         ).astype(cp.uint32)
 
         born = cp.zeros(
-            shape = (2*self.n_size, self.n_genes, ),
+            shape = (2*self.genes.shape[0], self.n_genes, ),
             dtype = cp.uint32
         )
 
         # 给每个 born 分配一个 thread 去做
         BLOCK_SIZE = 16
         dim_block = (2, BLOCK_SIZE, )
-        dim_grid = (1, ceil(self.n_size/dim_block[1]), )
+        dim_grid = (1, ceil(self.genes.shape[0]/dim_block[1]), )
         cross_kernel(
             dim_grid,
             dim_block,
-            (self.genes, match, born, self.n_size, self.n_genes, )
+            (self.genes, match, born, self.genes.shape[0], self.n_genes, )
         )
 
         self.genes = cp.concatenate(
@@ -167,17 +163,49 @@ class Population:
             axis = 0
         )
 
-        self.n_size = self.genes.shape[0]
-
     # 过滤与筛选
     def select_next_gen(self) -> None:
 
         # 那么就按照 probs 作为概率，选出下一代
         next_gen_indexes = cp.unique(cp.random.choice(
-            self.n_size, 
-            size = self.n_size, 
+            self.genes.shape[0], 
+            size = self.genes.shape[0], 
             p = self.scores
         ))
 
         self.genes = self.genes[next_gen_indexes, :]
-        self.n_size = self.genes.shape[0]
+    
+    # 获取最高分数
+    def get_maximum_scores(self) -> cp.ndarray:
+        return cp.amax(self.scores)
+    
+    # 更新生存几率
+    def update_chance(self) -> None:
+        self.calculate_phenotype()
+        self.calculate_scores()
+        self.calculate_survival_chance()
+
+    # 更新状态
+    def evolve(self) -> None:
+
+        # 更新适应度
+        self.update_chance()
+
+        # 筛选
+        self.select_next_gen()
+
+        # 更新适应度
+        self.update_chance()
+
+        # 变异
+        self.populations_mutate()
+
+        # 更新适应度
+        self.update_chance()
+
+        # 杂交（使变异产生的新基因型扩散）
+        self.born_next_generation()
+
+        # 更新适应度
+        self.update_chance()
+        
