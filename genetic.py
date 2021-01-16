@@ -140,7 +140,7 @@ class Population:
             a = self.genes.shape[0],
             size = self.genes.shape[0],
             replace = True,
-            p = self.scores
+            p = self.probs
         ).astype(cp.uint32)
 
         born = cp.zeros(
@@ -170,14 +170,18 @@ class Population:
         next_gen_indexes = cp.unique(cp.random.choice(
             self.genes.shape[0], 
             size = self.genes.shape[0], 
-            p = self.scores
+            p = self.probs
         ))
 
         self.genes = self.genes[next_gen_indexes, :]
     
     # 获取最高分数
-    def get_maximum_scores(self) -> cp.ndarray:
+    def get_maximum_score(self) -> cp.ndarray:
         return cp.amax(self.scores)
+    
+    # 获取种群规模
+    def get_population_size(self) -> cp.ndarray:
+        return self.genes.shape[0]
     
     # 更新生存几率
     def update_chance(self) -> None:
