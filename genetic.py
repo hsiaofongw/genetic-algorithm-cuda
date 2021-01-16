@@ -20,6 +20,9 @@ class Population:
     # 每个个体有多少个基因位点
     n_genes: int
 
+    # 最大承载量
+    maximum_size = 10000
+
     def __init__(self, genes: cp.ndarray) -> None:
         self.genes = genes
         self.n_genes = genes.shape[1]
@@ -42,7 +45,7 @@ class Population:
         self.phenotype = cp.argsort(self.genes, axis = 1).astype(cp.uint32)
 
     # 计算得分
-    def calculate_scores(self) -> None:
+    def calculate_scores(self, environment: cp.ndarray) -> None:
 
         # 将 genes (基因型) 转化为 phenotype (表现型)
         # routes 的每行是一个 route，一个 route 是一个关于 vertex 的列表
@@ -50,7 +53,7 @@ class Population:
 
         # distance_mat[i, j] 决定了 vertex i -> vertex j 的距离
         # 这个届时换成特定的距离矩阵
-        distance_mat = cp.random.rand(self.n_genes, self.n_genes, dtype = cp.float32)
+        distance_mat = environment
 
         # 确定要调用的 GPU 资源的规模，参看 CUDA Programming Guide
         # out_distances[i, j] 代表 routes[i] 的从 routes[i, j] 走到 routes[i, j+1] 的距离
@@ -184,32 +187,37 @@ class Population:
         return self.genes.shape[0]
     
     # 更新生存几率
-    def update_chance(self) -> None:
+    def update_chance(self, environment: cp.ndarray) -> None:
         self.calculate_phenotype()
-        self.calculate_scores()
+        self.calculate_scores(environment)
         self.calculate_survival_chance()
 
     # 更新状态
-    def evolve(self) -> None:
+    def evolve(self, environment: cp.ndarray) -> None:
 
         # 更新适应度
-        self.update_chance()
+        self.update_chance(environment)
 
         # 筛选
         self.select_next_gen()
 
         # 更新适应度
-        self.update_chance()
+        self.update_chance(environment)
 
         # 变异
         self.populations_mutate()
 
         # 更新适应度
-        self.update_chance()
+        self.update_chance(environment)
 
         # 杂交（使变异产生的新基因型扩散）
         self.born_next_generation()
 
         # 更新适应度
-        self.update_chance()
+        self.update_chance(environment)
+
+        # 减少数量
+        while self.get_population_size() >= self.maximum_size:
+            self.select_next_gen()
+            self.update_chance(environment)
         
