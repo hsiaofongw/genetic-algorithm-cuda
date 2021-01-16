@@ -78,17 +78,15 @@ class Population:
     # 计算每个个体的生存几率
     def calculate_survival_chance(self):
 
-        # 首先获取适应度，值越高，适应得越好
+        # 首先获取适应度
         scores = self.scores
 
         # 升序排列，数字越高，对应的适应度越高
         order = cp.argsort(cp.argsort(scores))
 
-        # 把排位改变为降序排列
-        order = cp.subtract(self.genes.shape[0] - 1, order)
-
         # probs[i] 是第 i 个个体被选入下一代的概率
         self.probs = cp.divide(order, cp.sum(order))
+
 
     # 通过基因变异引入新性状
     def populations_mutate(self) -> None:
